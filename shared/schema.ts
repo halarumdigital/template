@@ -1,108 +1,108 @@
 import { sql } from 'drizzle-orm';
 import {
   index,
-  jsonb,
-  pgTable,
+  json,
+  mysqlTable,
   timestamp,
   varchar,
   text,
   decimal,
   boolean,
-  integer,
-} from "drizzle-orm/pg-core";
+  int,
+} from "drizzle-orm/mysql-core";
 import { relations } from "drizzle-orm";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
 // Session storage table.
-export const sessions = pgTable(
+export const sessions = mysqlTable(
   "sessions",
   {
-    sid: varchar("sid").primaryKey(),
-    sess: jsonb("sess").notNull(),
+    sid: varchar("sid", { length: 128 }).primaryKey(),
+    sess: json("sess").notNull(),
     expire: timestamp("expire").notNull(),
   },
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
 // User storage table.
-export const users = pgTable("users", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  email: varchar("email").unique(),
-  firstName: varchar("first_name"),
-  lastName: varchar("last_name"),
-  profileImageUrl: varchar("profile_image_url"),
-  role: varchar("role", { enum: ["admin", "client", "team"] }).notNull().default("client"),
+export const users = mysqlTable("users", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
+  email: varchar("email", { length: 255 }).unique(),
+  firstName: varchar("first_name", { length: 100 }),
+  lastName: varchar("last_name", { length: 100 }),
+  profileImageUrl: varchar("profile_image_url", { length: 500 }),
+  role: varchar("role", { length: 10 }).notNull().default("client"),
   active: boolean("active").notNull().default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
 
 // Clients table
-export const clients = pgTable("clients", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id),
-  companyName: varchar("company_name"),
-  phone: varchar("phone"),
+export const clients = mysqlTable("clients", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
+  userId: varchar("user_id", { length: 36 }).references(() => users.id),
+  companyName: varchar("company_name", { length: 255 }),
+  phone: varchar("phone", { length: 20 }),
   address: text("address"),
-  city: varchar("city"),
-  state: varchar("state"),
-  zipCode: varchar("zip_code"),
-  taxId: varchar("tax_id"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  city: varchar("city", { length: 100 }),
+  state: varchar("state", { length: 50 }),
+  zipCode: varchar("zip_code", { length: 10 }),
+  taxId: varchar("tax_id", { length: 50 }),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
 
 // Team members table
-export const teamMembers = pgTable("team_members", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").references(() => users.id),
-  position: varchar("position"),
-  department: varchar("department"),
+export const teamMembers = mysqlTable("team_members", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
+  userId: varchar("user_id", { length: 36 }).references(() => users.id),
+  position: varchar("position", { length: 100 }),
+  department: varchar("department", { length: 100 }),
   salary: decimal("salary", { precision: 10, scale: 2 }),
   hireDate: timestamp("hire_date"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
 
 // Projects table
-export const projects = pgTable("projects", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  name: varchar("name").notNull(),
+export const projects = mysqlTable("projects", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
+  name: varchar("name", { length: 255 }).notNull(),
   description: text("description"),
-  clientId: varchar("client_id").references(() => clients.id),
-  status: varchar("status", { enum: ["planning", "active", "completed", "on_hold", "cancelled"] }).notNull().default("planning"),
+  clientId: varchar("client_id", { length: 36 }).references(() => clients.id),
+  status: varchar("status", { length: 15 }).notNull().default("planning"),
   startDate: timestamp("start_date"),
   endDate: timestamp("end_date"),
   budget: decimal("budget", { precision: 10, scale: 2 }),
-  progress: integer("progress").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  progress: int("progress").default(0),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
 
 // Project assignments table
-export const projectAssignments = pgTable("project_assignments", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").references(() => projects.id),
-  teamMemberId: varchar("team_member_id").references(() => teamMembers.id),
-  role: varchar("role"),
-  assignedAt: timestamp("assigned_at").defaultNow(),
+export const projectAssignments = mysqlTable("project_assignments", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
+  projectId: varchar("project_id", { length: 36 }).references(() => projects.id),
+  teamMemberId: varchar("team_member_id", { length: 36 }).references(() => teamMembers.id),
+  role: varchar("role", { length: 100 }),
+  assignedAt: timestamp("assigned_at").default(sql`CURRENT_TIMESTAMP`),
 });
 
 // Invoices table
-export const invoices = pgTable("invoices", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  number: varchar("number").unique().notNull(),
-  clientId: varchar("client_id").references(() => clients.id),
-  projectId: varchar("project_id").references(() => projects.id),
+export const invoices = mysqlTable("invoices", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
+  number: varchar("number", { length: 50 }).unique().notNull(),
+  clientId: varchar("client_id", { length: 36 }).references(() => clients.id),
+  projectId: varchar("project_id", { length: 36 }).references(() => projects.id),
   amount: decimal("amount", { precision: 10, scale: 2 }).notNull(),
-  status: varchar("status", { enum: ["draft", "sent", "paid", "overdue", "cancelled"] }).notNull().default("draft"),
+  status: varchar("status", { length: 15 }).notNull().default("draft"),
   issueDate: timestamp("issue_date").notNull(),
   dueDate: timestamp("due_date").notNull(),
   paidDate: timestamp("paid_date"),
   description: text("description"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
 });
 
 // Relations
