@@ -1,0 +1,120 @@
+ Área do Administrador (/admin)
+Acesso: Usuários com role 'admin'
+Sidebar com menus:
+
+Clientes
+
+Listar todos os clientes
+Cadastrar novo cliente
+Editar dados do cliente
+Desativar/ativar cliente
+Visualizar faturas do cliente
+
+
+Equipe
+
+Listar membros da equipe
+Cadastrar novo membro
+Editar dados do membro
+Atribuir projetos
+Desativar/ativar membro
+
+
+
+Funcionalidades adicionais:
+
+Dashboard com estatísticas gerais
+Gerenciamento de usuários do sistema
+Relatórios financeiros
+
+👤 Área do Cliente (/client)
+Acesso: Clientes cadastrados
+Sidebar com menus:
+
+Faturas
+
+Visualizar todas as faturas
+Filtrar por status (pendente, paga, vencida)
+Baixar fatura em PDF
+Histórico de pagamentos
+Visualizar detalhes da fatura
+
+
+
+Funcionalidades adicionais:
+
+Dashboard com resumo das faturas
+Perfil do cliente (editar dados pessoais)
+Histórico de projetos
+
+👥 Área da Equipe (/admin com role 'team')
+Acesso: Usuários com role 'team'
+Sidebar com menus:
+
+Projetos
+
+Visualizar projetos atribuídos
+Atualizar status do projeto
+Adicionar comentários/anotações
+Upload de arquivos do projeto
+Histórico de atividades
+
+
+
+Funcionalidades adicionais:
+
+Dashboard com projetos em andamento
+Perfil da equipe (editar dados pessoais)
+Timeline de atividades
+
+Sistema de Autenticação
+Middleware de Autenticação
+
+Verificar se o usuário está logado
+Verificar permissões por role
+Redirecionamento baseado no tipo de usuário
+
+Rotas Protegidas
+
+/admin/* - Apenas usuários com role 'admin' ou 'team'
+/client/* - Apenas clientes autenticados
+Diferentes views baseadas no role do usuário
+
+Interface do Usuário
+Layout Base
+
+Header com logo e informações do usuário logado
+Sidebar responsiva com navegação
+Área de conteúdo principal
+Footer com informações do sistema
+
+Componentes Reutilizáveis
+
+Tabelas com paginação
+Formulários de cadastro/edição
+Modais para confirmações
+Alertas de sucesso/erro
+Cards informativos no dashboard
+
+Responsividade
+
+Design mobile-first
+Sidebar colapsável em dispositivos móveis
+Tabelas responsivas com scroll horizontal
+Formulários adaptáveis
+
+Recursos Técnicos
+Segurança
+
+Senhas criptografadas com bcrypt
+Sessões seguras
+Validação de entrada de dados
+Prevenção contra SQL injection
+CSRF protection
+
+Performance
+
+Connection pooling do MySQL
+Cache de consultas frequentes
+Otimização de queries
+Compressão de assets
