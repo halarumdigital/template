@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { useAuth } from "@/hooks/useAuth";
+import { useSystemSettings } from "@/hooks/useSystemSettings";
 import {
   BarChart3,
   Users,
@@ -27,6 +28,9 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const [location] = useLocation();
   const { user } = useAuth();
   const [expandedMenus, setExpandedMenus] = useState<string[]>([]);
+
+  // Get system settings
+  const { logo, systemColor } = useSystemSettings();
 
   const toggleMenu = (menu: string) => {
     setExpandedMenus(prev =>
@@ -64,6 +68,11 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       title: "Relatórios",
       href: "/admin/reports",
       icon: FileText,
+    },
+    {
+      title: "Configurações",
+      href: "/admin/settings",
+      icon: Settings,
     },
   ];
 
@@ -118,8 +127,21 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
 
   const menuItems = getMenuItems();
 
-  const handleLogout = () => {
-    window.location.href = "/api/logout";
+  const handleLogout = async () => {
+    try {
+      // Make logout request to clear session
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+      
+      // Redirect to login page
+      window.location.href = "/";
+    } catch (error) {
+      console.error("Error during logout:", error);
+      // Even if logout request fails, redirect to login
+      window.location.href = "/";
+    }
   };
 
   return (
@@ -135,20 +157,37 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed left-0 top-0 z-50 h-full w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 lg:relative lg:translate-x-0",
-          isOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed left-0 top-0 z-50 h-screen w-64 bg-white border-r border-gray-200 transform transition-transform duration-300 lg:fixed lg:translate-x-0",
+          isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         )}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
           <div className="p-6">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-primary rounded-lg flex items-center justify-center">
-                <Settings className="w-5 h-5 text-primary-foreground" />
-              </div>
-              <div>
-                <h2 className="font-bold text-gray-900">Sistema</h2>
-                <p className="text-xs text-gray-600">Gerenciamento</p>
+            <div className="flex items-center justify-center">
+              {logo ? (
+                <img
+                  src={logo}
+                  alt="Logo do Sistema"
+                  className="max-h-12 max-w-full object-contain"
+                  onError={(e) => {
+                    // Fallback to default icon if logo fails to load
+                    e.currentTarget.style.display = 'none';
+                    const fallback = e.currentTarget.nextElementSibling as HTMLElement;
+                    if (fallback) fallback.style.display = 'flex';
+                  }}
+                />
+              ) : null}
+              
+              {/* Fallback icon - only shown if logo fails to load or doesn't exist */}
+              <div 
+                className="w-12 h-12 rounded-lg flex items-center justify-center"
+                style={{ 
+                  backgroundColor: systemColor,
+                  display: logo ? 'none' : 'flex' 
+                }}
+              >
+                <Settings className="w-6 h-6 text-white" />
               </div>
             </div>
           </div>
@@ -187,9 +226,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                                 className={cn(
                                   "w-full justify-start text-left font-normal text-sm",
                                   location === subItem.href
-                                    ? "bg-primary/10 text-primary"
+                                    ? "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                                     : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
                                 )}
+                                style={location === subItem.href ? {
+                                  backgroundColor: `${systemColor}15`,
+                                  color: systemColor
+                                } : {}}
                                 onClick={onClose}
                               >
                                 {subItem.title}
@@ -206,9 +249,13 @@ export default function Sidebar({ isOpen, onClose }: SidebarProps) {
                         className={cn(
                           "w-full justify-start text-left font-normal",
                           location === item.href
-                            ? "bg-primary/10 text-primary"
+                            ? "text-gray-700 hover:bg-gray-50"
                             : "text-gray-700 hover:bg-gray-50"
                         )}
+                        style={location === item.href ? {
+                          backgroundColor: `${systemColor}15`,
+                          color: systemColor
+                        } : {}}
                         onClick={onClose}
                       >
                         <item.icon className="w-5 h-5 mr-3" />

@@ -4,6 +4,9 @@ import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { insertClientSchema, insertTeamMemberSchema, insertProjectSchema, insertInvoiceSchema } from "@shared/schema";
 import { z } from "zod";
+import multer from "multer";
+import path from "path";
+import fs from "fs/promises";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -245,8 +248,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ message: "Access denied" });
       }
       
-      const validatedData = insertTeamMemberSchema.parse(req.body);
-      const member = await storage.createTeamMember(validatedData);
+      const { createTeamMemberSchema } = await import("@shared/schema");
+      const validatedData = createTeamMemberSchema.parse(req.body);
+      
+      // Create the team member with user data
+      const member = await storage.createTeamMemberWithUser(validatedData);
       res.json(member);
     } catch (error) {
       console.error("Error creating team member:", error);
@@ -450,6 +456,257 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching team stats:", error);
       res.status(500).json({ message: "Failed to fetch team stats" });
+    }
+  });
+
+  // Configure multer for file uploads
+  const upload = multer({
+    dest: 'uploads/temp/', // Temporary directory for multer
+    limits: {
+      fileSize: 5 * 1024 * 1024, // 5MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      if (file.mimetype.startsWith('image/')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Apenas arquivos de imagem são permitidos'));
+      }
+    },
+  });
+
+  // System settings routes
+  app.get("/api/admin/settings", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const settings = await storage.getSystemSettings();
+      res.json(settings);
+    } catch (error) {
+      console.error("Error fetching system settings:", error);
+      res.status(500).json({ message: "Failed to fetch system settings" });
+    }
+  });
+
+  app.post("/api/admin/settings", isAuthenticated, upload.fields([
+    { name: 'logo', maxCount: 1 },
+    { name: 'favicon', maxCount: 1 }
+  ]), async (req: any, res) => {
+    try {
+      console.log("Settings update request received");
+      console.log("Body:", req.body);
+      console.log("Files:", req.files);
+      
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        console.log("No user ID found");
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (user?.role !== 'admin') {
+        console.log("User is not admin:", user?.role);
+        return res.status(403).json({ message: "Access denied" });
+      }
+
+      const { systemName, systemSubtitle, systemColor, systemColorHex } = req.body;
+      const files = req.files as { [fieldname: string]: Express.Multer.File[] };
+
+      console.log("Processing settings:", { systemName, systemSubtitle, systemColor, systemColorHex });
+
+      // Create uploads directory if it doesn't exist
+      try {
+        await fs.access('public/uploads');
+      } catch {
+        await fs.mkdir('public/uploads', { recursive: true });
+      }
+
+      // Handle logo upload
+      if (files?.logo?.[0]) {
+        console.log("Processing logo upload");
+        const logoFile = files.logo[0];
+        console.log("Logo file:", logoFile);
+        
+        const logoExtension = path.extname(logoFile.originalname);
+        const logoFilename = `logo_${Date.now()}${logoExtension}`;
+        const logoPath = path.join('public/uploads', logoFilename);
+        
+        console.log("Copying logo from", logoFile.path, "to", logoPath);
+        await fs.copyFile(logoFile.path, logoPath);
+        await fs.unlink(logoFile.path); // Remove temp file
+        
+        console.log("Saving logo setting to database");
+        await storage.setSystemSetting('logo', `/uploads/${logoFilename}`, 'string');
+        console.log("Logo upload completed");
+      }
+
+      // Handle favicon upload
+      if (files?.favicon?.[0]) {
+        console.log("Processing favicon upload");
+        const faviconFile = files.favicon[0];
+        console.log("Favicon file:", faviconFile);
+        
+        const faviconExtension = path.extname(faviconFile.originalname);
+        const faviconFilename = `favicon_${Date.now()}${faviconExtension}`;
+        const faviconPath = path.join('public/uploads', faviconFilename);
+        
+        console.log("Copying favicon from", faviconFile.path, "to", faviconPath);
+        await fs.copyFile(faviconFile.path, faviconPath);
+        await fs.unlink(faviconFile.path); // Remove temp file
+        
+        console.log("Saving favicon setting to database");
+        await storage.setSystemSetting('favicon', `/uploads/${faviconFilename}`, 'string');
+        console.log("Favicon upload completed");
+      }
+
+      // Handle other settings
+      if (systemName) {
+        await storage.setSystemSetting('systemName', systemName, 'string');
+      }
+
+      if (systemSubtitle) {
+        await storage.setSystemSetting('systemSubtitle', systemSubtitle, 'string');
+      }
+
+      if (systemColorHex || systemColor) {
+        const color = systemColorHex || systemColor;
+        await storage.setSystemSetting('systemColor', color, 'string');
+      }
+
+      const updatedSettings = await storage.getSystemSettings();
+      res.json({ 
+        message: "Configurações salvas com sucesso",
+        settings: updatedSettings
+      });
+    } catch (error) {
+      console.error("Error saving system settings:", error);
+      console.error("Error stack:", error.stack);
+      res.status(500).json({ 
+        message: "Failed to save system settings",
+        error: error.message 
+      });
+    }
+  });
+
+  // Public system settings route (for login page and public access)
+  app.get("/api/system/settings", async (req: any, res) => {
+    try {
+      const settings = await storage.getSystemSettings();
+      
+      // Only return public settings (logo, name, color, favicon)
+      const publicSettings = {
+        systemName: settings.systemName || settings.system_name || "Sistema de Gerenciamento",
+        logo: settings.logo || settings.system_logo,
+        favicon: settings.favicon || settings.system_favicon,
+        systemColor: settings.systemColor || settings.primary_color || "#3b82f6",
+      };
+      
+      res.json(publicSettings);
+    } catch (error) {
+      console.error("Error fetching public system settings:", error);
+      res.status(500).json({ message: "Failed to fetch system settings" });
+    }
+  });
+
+  // Roles management routes
+  app.get("/api/admin/roles", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const roles = await storage.getRoles();
+      res.json(roles);
+    } catch (error) {
+      console.error("Error fetching roles:", error);
+      res.status(500).json({ message: "Failed to fetch roles" });
+    }
+  });
+
+  app.post("/api/admin/roles", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { createRoleSchema } = await import("@shared/schema");
+      const validatedData = createRoleSchema.parse(req.body);
+      
+      const role = await storage.createRole(validatedData);
+      res.json(role);
+    } catch (error) {
+      console.error("Error creating role:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to create role" });
+    }
+  });
+
+  app.put("/api/admin/roles/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { id } = req.params;
+      const { createRoleSchema } = await import("@shared/schema");
+      const validatedData = createRoleSchema.parse(req.body);
+      
+      const role = await storage.updateRole(id, validatedData);
+      res.json(role);
+    } catch (error) {
+      console.error("Error updating role:", error);
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ message: "Invalid data", errors: error.errors });
+      }
+      res.status(500).json({ message: "Failed to update role" });
+    }
+  });
+
+  app.delete("/api/admin/roles/:id", isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
+      if (user?.role !== 'admin') {
+        return res.status(403).json({ message: "Access denied" });
+      }
+      
+      const { id } = req.params;
+      await storage.deleteRole(id);
+      res.json({ message: "Role deleted successfully" });
+    } catch (error) {
+      console.error("Error deleting role:", error);
+      res.status(500).json({ message: "Failed to delete role" });
     }
   });
 

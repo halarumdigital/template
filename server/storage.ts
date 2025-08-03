@@ -5,6 +5,8 @@ import {
   projects,
   invoices,
   projectAssignments,
+  systemSettings,
+  userRoles,
   type User,
   type UpsertUser,
   type Client,
@@ -16,6 +18,9 @@ import {
   type Invoice,
   type InsertInvoice,
   type ProjectAssignment,
+  type SystemSetting,
+  type InsertSystemSetting,
+  type UserRole,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, count, sum, sql } from "drizzle-orm";
@@ -73,6 +78,22 @@ export interface IStorage {
     pendingTasks: number;
     completedToday: number;
   }>;
+
+  // System settings operations
+  getSystemSettings(): Promise<Record<string, any>>;
+  getSystemSetting(key: string): Promise<SystemSetting | undefined>;
+  setSystemSetting(key: string, value: string, type?: string): Promise<SystemSetting>;
+  deleteSystemSetting(key: string): Promise<void>;
+
+  // Team member with user creation
+  createTeamMemberWithUser(data: any): Promise<TeamMember>;
+
+  // Roles operations
+  getRoles(): Promise<UserRole[]>;
+  getRole(id: string): Promise<UserRole | undefined>;
+  createRole(data: any): Promise<UserRole>;
+  updateRole(id: string, data: any): Promise<UserRole>;
+  deleteRole(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -330,6 +351,212 @@ export class DatabaseStorage implements IStorage {
       pendingTasks: 12, // This would come from a tasks table in a real implementation
       completedToday: 8, // This would come from a tasks table in a real implementation
     };
+  }
+
+  // System settings operations
+  async getSystemSettings(): Promise<Record<string, any>> {
+    const settings = await db.select().from(systemSettings);
+    const result: Record<string, any> = {};
+    
+    settings.forEach(setting => {
+      let value = setting.settingValue;
+      
+      // Parse value based on type
+      switch (setting.settingType) {
+        case 'boolean':
+          value = value === 'true';
+          break;
+        case 'number':
+          value = parseFloat(value || '0');
+          break;
+        case 'json':
+          try {
+            value = JSON.parse(value || '{}');
+          } catch {
+            value = {};
+          }
+          break;
+        default:
+          // Keep as string
+          break;
+      }
+      
+      // Store all settings with original keys first
+      result[setting.settingKey] = value;
+      
+      // Map database keys to frontend expected keys (only if not already set by a more recent key)
+      switch (setting.settingKey) {
+        case 'system_name':
+          if (!result['systemName']) result['systemName'] = value;
+          break;
+        case 'system_title':
+          if (!result['systemTitle']) result['systemTitle'] = value;
+          break;
+        case 'primary_color':
+          if (!result['systemColor']) result['systemColor'] = value;
+          break;
+        case 'system_logo':
+          // Only use system_logo if logo doesn't exist (prioritize newer 'logo' key)
+          if (!result['logo']) result['logo'] = value;
+          break;
+        case 'system_favicon':
+          // Only use system_favicon if favicon doesn't exist (prioritize newer 'favicon' key)
+          if (!result['favicon']) result['favicon'] = value;
+          break;
+        case 'footer_name':
+          if (!result['systemSubtitle']) result['systemSubtitle'] = value;
+          break;
+        default:
+          // Keep original key
+          break;
+      }
+    });
+    
+    return result;
+  }
+
+  async getSystemSetting(key: string): Promise<SystemSetting | undefined> {
+    const [setting] = await db
+      .select()
+      .from(systemSettings)
+      .where(eq(systemSettings.settingKey, key));
+    return setting;
+  }
+
+  async setSystemSetting(
+    key: string, 
+    value: string, 
+    type: string = 'string'
+  ): Promise<SystemSetting> {
+    const existingSetting = await this.getSystemSetting(key);
+    
+    if (existingSetting) {
+      // Update existing setting
+      await db
+        .update(systemSettings)
+        .set({
+          settingValue: value,
+          settingType: type,
+          updatedAt: new Date(),
+        })
+        .where(eq(systemSettings.settingKey, key));
+      
+      // Return the updated setting
+      const updatedSetting = await this.getSystemSetting(key);
+      return updatedSetting!;
+    } else {
+      // Insert new setting
+      await db
+        .insert(systemSettings)
+        .values({
+          settingKey: key,
+          settingValue: value,
+          settingType: type,
+        });
+      
+      // Return the newly created setting
+      const newSetting = await this.getSystemSetting(key);
+      return newSetting!;
+    }
+  }
+
+  async deleteSystemSetting(key: string): Promise<void> {
+    await db.delete(systemSettings).where(eq(systemSettings.settingKey, key));
+  }
+
+  // Team member with user creation
+  async createTeamMemberWithUser(data: any): Promise<TeamMember> {
+    const bcrypt = await import('bcrypt');
+    
+    // Hash the password
+    const hashedPassword = await bcrypt.hash(data.password, 10);
+    
+    // Create the user first
+    const [newUser] = await db
+      .insert(users)
+      .values({
+        email: data.email,
+        firstName: data.firstName,
+        lastName: data.lastName,
+        phone: data.phone,
+        password: hashedPassword,
+        role: data.role,
+        active: true,
+      })
+      .returning();
+
+    // Create the team member linked to the user
+    const [newTeamMember] = await db
+      .insert(teamMembers)
+      .values({
+        userId: newUser.id,
+        position: data.position,
+        department: data.department,
+        salary: data.salary ? data.salary.toString() : null,
+        hireDate: data.hireDate ? new Date(data.hireDate) : new Date(),
+      })
+      .returning();
+
+    return newTeamMember;
+  }
+
+  // Roles operations
+  async getRoles(): Promise<UserRole[]> {
+    const roles = await db.select().from(userRoles).orderBy(desc(userRoles.createdAt));
+    
+    // Parse permissions JSON for each role
+    return roles.map(role => ({
+      ...role,
+      permissions: typeof role.permissions === 'string' 
+        ? JSON.parse(role.permissions) 
+        : role.permissions || []
+    }));
+  }
+
+  async getRole(id: string): Promise<UserRole | undefined> {
+    const [role] = await db.select().from(userRoles).where(eq(userRoles.id, id));
+    return role;
+  }
+
+  async createRole(data: any): Promise<UserRole> {
+    const [newRole] = await db
+      .insert(userRoles)
+      .values({
+        name: data.name,
+        displayName: data.displayName,
+        description: data.description,
+        permissions: JSON.stringify(data.permissions || []),
+        isSystem: false,
+        active: data.active,
+      })
+      .returning();
+    return newRole;
+  }
+
+  async updateRole(id: string, data: any): Promise<UserRole> {
+    const [updatedRole] = await db
+      .update(userRoles)
+      .set({
+        name: data.name,
+        displayName: data.displayName,
+        description: data.description,
+        permissions: JSON.stringify(data.permissions || []),
+        active: data.active,
+        updatedAt: new Date(),
+      })
+      .where(eq(userRoles.id, id))
+      .returning();
+    return updatedRole;
+  }
+
+  async deleteRole(id: string): Promise<void> {
+    // Check if role is system role
+    const role = await this.getRole(id);
+    if (role?.isSystem) {
+      throw new Error("Cannot delete system role");
+    }
+    
+    await db.delete(userRoles).where(eq(userRoles.id, id));
   }
 }
 

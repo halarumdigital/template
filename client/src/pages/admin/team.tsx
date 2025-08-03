@@ -8,12 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { insertTeamMemberSchema } from "@shared/schema";
+import { createTeamMemberSchema } from "@shared/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Search } from "lucide-react";
+import { Plus, Search, User, Shield, Bus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -49,11 +50,18 @@ export default function TeamPage() {
   });
 
   const form = useForm({
-    resolver: zodResolver(insertTeamMemberSchema),
+    resolver: zodResolver(createTeamMemberSchema),
     defaultValues: {
+      firstName: "",
+      lastName: "",
+      email: "",
+      phone: "",
+      password: "",
+      role: "team",
       position: "",
       department: "",
-      salary: "",
+      salary: 0,
+      hireDate: "",
     },
   });
 
@@ -142,65 +150,284 @@ export default function TeamPage() {
                 Novo Membro
               </Button>
             </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Novo Membro da Equipe</DialogTitle>
+            <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden">
+              <DialogHeader className="pb-4 border-b">
+                <DialogTitle className="text-xl font-semibold text-gray-900 flex items-center">
+                  <Plus className="w-5 h-5 mr-2 text-blue-600" />
+                  Novo Membro da Equipe
+                </DialogTitle>
+                <p className="text-sm text-gray-600 mt-1">
+                  Preencha as informações para adicionar um novo membro à equipe
+                </p>
               </DialogHeader>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="position"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Cargo</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="department"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Departamento</FormLabel>
-                        <FormControl>
-                          <Input {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="salary"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Salário</FormLabel>
-                        <FormControl>
-                          <Input {...field} type="number" step="0.01" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex justify-end space-x-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setDialogOpen(false)}
-                    >
-                      Cancelar
-                    </Button>
-                    <Button type="submit" disabled={createTeamMemberMutation.isPending}>
-                      {createTeamMemberMutation.isPending ? "Salvando..." : "Salvar"}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
+              
+              <div className="overflow-y-auto max-h-[calc(90vh-120px)] pr-2">
+                <Form {...form}>
+                  <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+                    {/* Dados Pessoais */}
+                    <div className="bg-gray-50 rounded-lg p-4">
+                      <div className="flex items-center mb-4">
+                        <User className="w-5 h-5 text-blue-600 mr-2" />
+                        <h3 className="text-lg font-medium text-gray-900">Dados Pessoais</h3>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="firstName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Nome *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="Digite o nome" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="lastName"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Sobrenome *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="Digite o sobrenome" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <FormField
+                          control={form.control}
+                          name="email"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Email *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="email" 
+                                  placeholder="email@exemplo.com" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="phone"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Telefone</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="(11) 99999-9999" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Dados de Acesso */}
+                    <div className="bg-blue-50 rounded-lg p-4">
+                      <div className="flex items-center mb-4">
+                        <Shield className="w-5 h-5 text-blue-600 mr-2" />
+                        <h3 className="text-lg font-medium text-gray-900">Dados de Acesso</h3>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="password"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Senha *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="password" 
+                                  placeholder="Senha de acesso" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="role"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Nível de Permissão *</FormLabel>
+                              <Select onValueChange={field.onChange} defaultValue={field.value}>
+                                <FormControl>
+                                  <SelectTrigger className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                                    <SelectValue placeholder="Selecione o nível" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="admin">
+                                    <div className="flex items-center">
+                                      <Shield className="w-4 h-4 mr-2 text-red-500" />
+                                      Administrador
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="team">
+                                    <div className="flex items-center">
+                                      <User className="w-4 h-4 mr-2 text-blue-500" />
+                                      Equipe
+                                    </div>
+                                  </SelectItem>
+                                  <SelectItem value="client">
+                                    <div className="flex items-center">
+                                      <User className="w-4 h-4 mr-2 text-green-500" />
+                                      Cliente
+                                    </div>
+                                  </SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+
+                    {/* Dados Profissionais */}
+                    <div className="bg-green-50 rounded-lg p-4">
+                      <div className="flex items-center mb-4">
+                        <Bus className="w-5 h-5 text-green-600 mr-2" />
+                        <h3 className="text-lg font-medium text-gray-900">Dados Profissionais</h3>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField
+                          control={form.control}
+                          name="position"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Cargo *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="Ex: Desenvolvedor, Designer" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="department"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Departamento *</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  placeholder="Ex: TI, Marketing, Vendas" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
+                        <FormField
+                          control={form.control}
+                          name="salary"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Salário</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="number" 
+                                  step="0.01" 
+                                  placeholder="0.00" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={form.control}
+                          name="hireDate"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel className="text-sm font-medium text-gray-700">Data de Contratação</FormLabel>
+                              <FormControl>
+                                <Input 
+                                  {...field} 
+                                  type="date" 
+                                  className="h-11 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </div>
+                  </form>
+                </Form>
+              </div>
+
+              {/* Footer com botões */}
+              <div className="flex justify-end space-x-3 pt-4 border-t bg-white">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setDialogOpen(false)}
+                  className="px-6 py-2 h-11"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  onClick={form.handleSubmit(onSubmit)}
+                  disabled={createTeamMemberMutation.isPending}
+                  className="px-6 py-2 h-11 bg-blue-600 hover:bg-blue-700"
+                >
+                  {createTeamMemberMutation.isPending ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+                      Salvando...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Criar Membro
+                    </>
+                  )}
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         </div>

@@ -6,10 +6,17 @@ dotenv.config();
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
+import path from "path";
 
 const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
+
+// Serve static files from public directory
+app.use('/uploads', (req, res, next) => {
+  console.log('Static file request:', req.path);
+  next();
+}, express.static(path.join(process.cwd(), 'public/uploads')));
 
 app.use((req, res, next) => {
   const start = Date.now();

@@ -25,12 +25,36 @@ export const sessions = mysqlTable(
   (table) => [index("IDX_session_expire").on(table.expire)],
 );
 
+// System settings table
+export const systemSettings = mysqlTable("system_settings", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
+  settingKey: varchar("setting_key", { length: 100 }).unique().notNull(),
+  settingValue: text("setting_value"),
+  settingType: varchar("setting_type", { length: 20 }).notNull().default("string"),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+});
+
+// User roles table
+export const userRoles = mysqlTable("user_roles", {
+  id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
+  name: varchar("name", { length: 50 }).unique().notNull(),
+  displayName: varchar("display_name", { length: 100 }).notNull(),
+  description: text("description"),
+  permissions: json("permissions").notNull().default("[]"),
+  isSystem: boolean("is_system").notNull().default(false),
+  active: boolean("active").notNull().default(true),
+  createdAt: timestamp("created_at").default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: timestamp("updated_at").default(sql`CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP`),
+});
+
 // User storage table.
 export const users = mysqlTable("users", {
   id: varchar("id", { length: 36 }).primaryKey().default(sql`(uuid())`),
   email: varchar("email", { length: 255 }).unique(),
   firstName: varchar("first_name", { length: 100 }),
   lastName: varchar("last_name", { length: 100 }),
+  phone: varchar("phone", { length: 20 }),
   profileImageUrl: varchar("profile_image_url", { length: 500 }),
   password: varchar("password", { length: 255 }),
   role: varchar("role", { length: 10 }).notNull().default("client"),
@@ -170,6 +194,27 @@ export const insertInvoiceSchema = createInsertSchema(invoices).omit({
   updatedAt: true,
 });
 
+export const insertSystemSettingSchema = createInsertSchema(systemSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserRoleSchema = createInsertSchema(userRoles).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+// Schema for creating/updating roles
+export const createRoleSchema = z.object({
+  name: z.string().min(1, "Nome da role é obrigatório").regex(/^[a-z_]+$/, "Nome deve conter apenas letras minúsculas e underscore"),
+  displayName: z.string().min(1, "Nome de exibição é obrigatório"),
+  description: z.string().optional(),
+  permissions: z.array(z.string()).default([]),
+  active: z.boolean().default(true),
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -188,3 +233,29 @@ export type Invoice = typeof invoices.$inferSelect;
 export type InsertInvoice = z.infer<typeof insertInvoiceSchema>;
 
 export type ProjectAssignment = typeof projectAssignments.$inferSelect;
+
+export type SystemSetting = typeof systemSettings.$inferSelect;
+export type InsertSystemSetting = z.infer<typeof insertSystemSettingSchema>;
+
+// Custom schema for creating team member with user data
+export const createTeamMemberSchema = z.object({
+  // User data
+  firstName: z.string().min(1, "Nome é obrigatório"),
+  lastName: z.string().min(1, "Sobrenome é obrigatório"),
+  email: z.string().email("Email inválido"),
+  phone: z.string().optional(),
+  password: z.string().min(6, "Senha deve ter pelo menos 6 caracteres"),
+  role: z.enum(["admin", "team", "client"]).default("team"),
+  
+  // Team member specific data
+  position: z.string().min(1, "Cargo é obrigatório"),
+  department: z.string().min(1, "Departamento é obrigatório"),
+  salary: z.number().positive("Salário deve ser positivo").optional(),
+  hireDate: z.string().optional(),
+});
+
+export type CreateTeamMember = z.infer<typeof createTeamMemberSchema>;
+
+export type UserRole = typeof userRoles.$inferSelect;
+export type InsertUserRole = z.infer<typeof insertUserRoleSchema>;
+export type CreateRole = z.infer<typeof createRoleSchema>;
