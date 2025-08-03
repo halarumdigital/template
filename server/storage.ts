@@ -23,6 +23,7 @@ import { eq, desc, and, count, sum, sql } from "drizzle-orm";
 export interface IStorage {
   // User operations
   getUser(id: string): Promise<User | undefined>;
+  getUserByEmail(email: string): Promise<User | undefined>;
   upsertUser(user: UpsertUser): Promise<User>;
 
   // Client operations
@@ -81,19 +82,34 @@ export class DatabaseStorage implements IStorage {
     return user;
   }
 
+  async getUserByEmail(email: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users).where(eq(users.email, email));
+    return user;
+  }
+
   async upsertUser(userData: UpsertUser): Promise<User> {
-    const [user] = await db
-      .insert(users)
-      .values(userData)
-      .onConflictDoUpdate({
-        target: users.id,
-        set: {
+    // Try to find existing user first
+    const existingUser = await this.getUser(userData.id);
+    
+    if (existingUser) {
+      // Update existing user
+      const [updatedUser] = await db
+        .update(users)
+        .set({
           ...userData,
           updatedAt: new Date(),
-        },
-      })
-      .returning();
-    return user;
+        })
+        .where(eq(users.id, userData.id))
+        .returning();
+      return updatedUser;
+    } else {
+      // Insert new user
+      const [newUser] = await db
+        .insert(users)
+        .values(userData)
+        .returning();
+      return newUser;
+    }
   }
 
   // Client operations

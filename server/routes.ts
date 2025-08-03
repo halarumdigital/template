@@ -9,10 +9,89 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
   await setupAuth(app);
 
-  // Auth routes
-  app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
+  // Local auth routes
+  app.post('/api/auth/login', async (req, res) => {
     try {
-      const userId = req.user.claims.sub;
+      const { email, password } = req.body;
+      
+      if (!email || !password) {
+        return res.status(400).json({ message: "Email e senha são obrigatórios" });
+      }
+
+      // Find user in database by email
+      const user = await storage.getUserByEmail(email);
+      
+      if (!user) {
+        return res.status(401).json({ message: "Credenciais inválidas" });
+      }
+
+      // Check if user is active
+      if (!user.active) {
+        return res.status(401).json({ message: "Usuário inativo" });
+      }
+
+      // Verify password
+      const bcrypt = await import('bcrypt');
+      const isValidPassword = await bcrypt.compare(password, user.password || '');
+      
+      if (!isValidPassword) {
+        return res.status(401).json({ message: "Credenciais inválidas" });
+      }
+
+      // Create session
+      (req as any).session.user = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        firstName: user.firstName,
+        lastName: user.lastName,
+        claims: { sub: user.id }
+      };
+
+      res.json({ 
+        message: "Login realizado com sucesso",
+        user: {
+          id: user.id,
+          email: user.email,
+          role: user.role,
+          firstName: user.firstName,
+          lastName: user.lastName
+        }
+      });
+    } catch (error) {
+      console.error("Error during login:", error);
+      res.status(500).json({ message: "Erro interno do servidor" });
+    }
+  });
+
+  app.post('/api/auth/logout', (req, res) => {
+    (req as any).session.destroy((err: any) => {
+      if (err) {
+        return res.status(500).json({ message: "Erro ao fazer logout" });
+      }
+      res.json({ message: "Logout realizado com sucesso" });
+    });
+  });
+
+  // Helper function to get current user ID
+  const getCurrentUserId = (req: any): string | null => {
+    if (req.session?.user) {
+      return req.session.user.id;
+    }
+    if (req.user?.claims?.sub) {
+      return req.user.claims.sub;
+    }
+    return null;
+  };
+
+  // Auth routes
+  app.get('/api/auth/user', async (req: any, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
       const user = await storage.getUser(userId);
       res.json(user);
     } catch (error) {
@@ -24,7 +103,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin routes (protected)
   app.get("/api/admin/stats", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -40,7 +124,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Client routes
   app.get("/api/clients", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -55,7 +144,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/clients", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -74,7 +168,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/clients/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -94,7 +193,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.delete("/api/clients/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -111,7 +215,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Team routes
   app.get("/api/team", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -126,7 +235,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/team", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -146,7 +260,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Project routes
   app.get("/api/projects", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       let projects;
       
       if (user?.role === 'admin') {
@@ -172,7 +291,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/projects", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -191,7 +315,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.put("/api/projects/:id", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin' && user?.role !== 'team') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -212,7 +341,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Invoice routes
   app.get("/api/invoices", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       let invoices;
       
       if (user?.role === 'admin') {
@@ -238,7 +372,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.post("/api/invoices", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       if (user?.role !== 'admin') {
         return res.status(403).json({ message: "Access denied" });
       }
@@ -258,7 +397,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Dashboard stats routes
   app.get("/api/stats/client/:clientId", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       const { clientId } = req.params;
       
       // Only allow clients to see their own stats or admins to see any stats
@@ -282,7 +426,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   app.get("/api/stats/team/:teamMemberId", isAuthenticated, async (req: any, res) => {
     try {
-      const user = await storage.getUser(req.user.claims.sub);
+      const userId = getCurrentUserId(req);
+      if (!userId) {
+        return res.status(401).json({ message: "Not authenticated" });
+      }
+      
+      const user = await storage.getUser(userId);
       const { teamMemberId } = req.params;
       
       // Only allow team members to see their own stats or admins to see any stats

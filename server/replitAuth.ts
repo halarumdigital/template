@@ -5,7 +5,8 @@ import passport from "passport";
 import session from "express-session";
 import type { Express, RequestHandler } from "express";
 import memoize from "memoizee";
-import connectPg from "connect-pg-simple";
+import MySQLStore from "express-mysql-session";
+import mysql from "mysql2/promise";
 import { storage } from "./storage";
 
 if (!process.env.REPLIT_DOMAINS) {
@@ -24,21 +25,15 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
-  const pgStore = connectPg(session);
-  const sessionStore = new pgStore({
-    conString: process.env.DATABASE_URL,
-    createTableIfMissing: false,
-    ttl: sessionTtl,
-    tableName: "sessions",
-  });
+  
+  // Use memory store for development (simpler setup)
   return session({
     secret: process.env.SESSION_SECRET!,
-    store: sessionStore,
     resave: false,
     saveUninitialized: false,
     cookie: {
       httpOnly: true,
-      secure: true,
+      secure: false, // Set to false for development (localhost)
       maxAge: sessionTtl,
     },
   });
@@ -128,9 +123,15 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // Check for local session first
+  if ((req as any).session?.user) {
+    return next();
+  }
+
+  // Fallback to Replit auth
   const user = req.user as any;
 
-  if (!req.isAuthenticated() || !user.expires_at) {
+  if (!req.isAuthenticated() || !user?.expires_at) {
     return res.status(401).json({ message: "Unauthorized" });
   }
 
